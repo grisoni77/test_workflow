@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pandas as pd
 
-BASE_URL = "https://www.football-data.co.uk/mmz4281"
-FIXTURES_URL = "https://www.football-data.co.uk/fixtures.csv"
+BASE_URL = "https://football-data.co.uk/mmz4281"
+FIXTURES_URL = "https://football-data.co.uk/fixtures.csv"
 
 # Codici dei campionati principali su football-data.co.uk
 LEAGUES = {
@@ -116,8 +116,12 @@ def normalize(raw: pd.DataFrame, require_result: bool = True) -> pd.DataFrame:
 
 
 def load_csv(path: Path, require_result: bool = True) -> pd.DataFrame:
-    # Alcuni file storici hanno righe con virgole in eccesso o encoding latin-1
-    raw = pd.read_csv(path, encoding="latin-1", on_bad_lines="skip")
+    # I file recenti sono UTF-8 con BOM, alcuni storici latin-1; ci sono righe con virgole in eccesso
+    try:
+        raw = pd.read_csv(path, encoding="utf-8-sig", on_bad_lines="skip")
+    except UnicodeDecodeError:
+        raw = pd.read_csv(path, encoding="latin-1", on_bad_lines="skip")
+    raw.columns = raw.columns.str.replace("\ufeff", "").str.replace("ï»¿", "").str.strip()
     return normalize(raw, require_result=require_result)
 
 
