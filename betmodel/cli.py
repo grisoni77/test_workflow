@@ -1,4 +1,4 @@
-"""Riga di comando: download, backtest, predict, compare."""
+"""Riga di comando: download, backtest, compare, predict, sharp, sharp-scan."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import backtest, data
+from . import backtest, data, sharp
 from .model import DixonColes
 
 DEFAULT_DATA = Path("data")
@@ -152,6 +152,72 @@ def cmd_predict(args) -> None:
                   f"prob {b['prob']:.1%}  edge {b['edge']:+.1%}{stake}")
 
 
+def _add_sharp_args(p: argparse.ArgumentParser) -> None:
+    d = sharp.SharpConfig()
+    p.add_argument("--books", default=",".join(d.books),
+                   help="bookmaker su cui puntare, es. b365,bw,wh (default: tutti)")
+    p.add_argument("--markets", default=",".join(d.markets), help="1x2,ou25")
+    p.add_argument("--min-edge", type=float, default=d.min_edge)
+    p.add_argument("--min-odds", type=float, default=d.min_odds)
+    p.add_argument("--max-odds", type=float, default=d.max_odds)
+    p.add_argument("--staking", default=d.staking, choices=["flat", "kelly"])
+    p.add_argument("--kelly-fraction", type=float, default=d.kelly_fraction)
+
+
+def _sharp_config(args) -> sharp.SharpConfig:
+    return sharp.SharpConfig(
+        books=tuple(b.strip().lower() for b in args.books.split(",")),
+        markets=tuple(m.strip() for m in args.markets.split(",")),
+        min_edge=args.min_edge, min_odds=args.min_odds, max_odds=args.max_odds,
+        staking=args.staking, kelly_fraction=args.kelly_fraction,
+    )
+
+
+def cmd_sharp(args) -> None:
+    cfg = _sharp_config(args)
+    rows = []
+    for league in args.league.split(","):
+        try:
+            matches = data.load_league(league, args.data_dir)
+        except FileNotFoundError as e:
+            print(e, file=sys.stderr)
+            continue
+        res = sharp.run(matches, cfg)
+        _print_summary(league, res.summary)
+        if res.summary["bets"]:
+            years = (matches["date"].max() - matches["date"].min()).days / 365.25
+            print(f"scommesse/anno: {res.summary['bets'] / years:.0f}")
+            rows.append({"league": league, "bets": res.summary["bets"],
+                         "roi": res.summary["roi"], "avg_clv": res.summary["avg_clv"]})
+        if args.out and not res.bets.empty:
+            out = Path(args.out)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            res.bets.to_csv(out.with_name(f"{out.stem}_{league}{out.suffix or '.csv'}"), index=False)
+    if len(rows) > 1:
+        print("\n" + pd.DataFrame(rows).sort_values("avg_clv", ascending=False)
+              .to_string(index=False, float_format="{:+.3f}".format))
+
+
+def cmd_sharp_scan(args) -> None:
+    """Opportunità sulle prossime partite (quote del file fixtures)."""
+    cfg = _sharp_config(args)
+    fixtures = data.load_csv(Path(args.fixtures or args.data_dir / "fixtures.csv"), require_result=False)
+    if args.league:
+        fixtures = fixtures[fixtures["league"].isin(args.league.split(","))]
+    if fixtures["odds_ps_H"].isna().all():
+        print("il file fixtures non contiene quote Pinnacle: servono quote in tempo reale "
+              "(es. The Odds API) per usare questa strategia sulle prossime partite")
+        return
+    bets = sharp.find_bets(fixtures, cfg)
+    if not bets:
+        print("nessuna opportunità con le quote attuali")
+    for b in sorted(bets, key=lambda b: -b["edge"]):
+        row = b["_row"]
+        print(f"{row.get('league', '')} {b['date']:%d/%m} {b['home']} - {b['away']}: "
+              f"{b['pick']} @ {b['odds']:.2f} su {data.SOFT_BOOKS.get(b['book'].upper(), b['book'])}  "
+              f"prob Pinnacle {b['prob']:.1%}  edge {b['edge']:+.1%}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="betmodel", description=__doc__)
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA)
@@ -179,6 +245,18 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--fixtures", help="CSV fixtures (default: <data-dir>/fixtures.csv)")
     _add_config_args(p)
     p.set_defaults(func=cmd_predict)
+
+    p = sub.add_parser("sharp", help="backtest: quote Pinnacle come riferimento, puntate sui bookmaker morbidi")
+    p.add_argument("--league", default="I1")
+    p.add_argument("--out", help="CSV con il dettaglio delle scommesse")
+    _add_sharp_args(p)
+    p.set_defaults(func=cmd_sharp)
+
+    p = sub.add_parser("sharp-scan", help="opportunità sharp vs soft sulle prossime partite")
+    p.add_argument("--league", help="filtra i campionati, es. I1,I2 (default: tutti)")
+    p.add_argument("--fixtures", help="CSV fixtures (default: <data-dir>/fixtures.csv)")
+    _add_sharp_args(p)
+    p.set_defaults(func=cmd_sharp_scan)
 
     args = parser.parse_args(argv)
     args.func(args)

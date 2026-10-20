@@ -44,6 +44,27 @@ Opzioni principali (valide per `backtest`, `compare`, `predict`):
 | `--xi` | `0.0019` | decadimento temporale per giorno |
 | `--train-days` | `730` | finestra di storico usata per il fit |
 
+## Strategia "sharp vs soft"
+
+Non usa il modello: prende le quote Pinnacle (margine basso, molto precise)
+come stima della probabilità vera e punta sul bookmaker "morbido" con la quota
+migliore quando `prob_Pinnacle × quota − 1 ≥ min-edge`.
+
+```bash
+# backtest su più campionati, solo bookmaker scelti
+python -m betmodel sharp --league I1,I2,SP2,T1 --books b365,bw,wh --min-edge 0.02
+
+# opportunità sulle prossime partite (servono quote Pinnacle nel file fixtures)
+python -m betmodel sharp-scan --league I1,I2
+```
+
+Limiti da tenere presenti:
+- le quote dei CSV sono una fotografia (di solito il venerdì): con quote in
+  tempo reale le occasioni sono di più ma durano poco;
+- i bookmaker morbidi limitano rapidamente i conti che vincono;
+- le quote dei siti italiani (.it) possono differire da quelle internazionali
+  presenti nei CSV, e non tutti i bookmaker sono autorizzati in Italia (ADM).
+
 ## Come leggere il backtest
 
 - **ROI**: profitto / puntato. Il margine del bookmaker parte da −4/−8%.

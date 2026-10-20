@@ -145,3 +145,20 @@ def test_backtest_cannot_beat_efficient_market_with_margin():
     s = backtest.run(df, cfg).summary
     # quote "vere" con margine: nel lungo periodo non si guadagna in modo significativo
     assert s["z_score"] < 2
+
+
+# --- strategia sharp vs soft ---
+
+def test_sharp_bets_only_when_soft_beats_pinnacle():
+    from betmodel import sharp
+    base = {"date": pd.Timestamp("2024-01-01"), "hg": 1, "ag": 0,
+            "odds_ps_H": 2.0, "odds_ps_D": 3.5, "odds_ps_A": 4.0}
+    rows = pd.DataFrame([
+        {**base, "home": "A", "away": "B", "odds_b365_H": 1.90, "odds_wh_H": 1.95},  # sotto Pinnacle
+        {**base, "home": "C", "away": "D", "odds_b365_H": 1.90, "odds_wh_H": 2.30},  # wh fuori linea
+    ])
+    cfg = sharp.SharpConfig(books=("b365", "wh"), markets=("1x2",), min_edge=0.02)
+    bets = sharp.find_bets(rows, cfg)
+    assert [(b["home"], b["pick"], b["book"], b["odds"]) for b in bets] == [("C", "H", "wh", 2.30)]
+    res = sharp.run(rows, cfg)
+    assert res.summary["bets"] == 1 and res.summary["profit"] == pytest.approx(1.30)

@@ -95,7 +95,7 @@ def _clv(row: pd.Series, market: str, pick: str, odds: float) -> float:
     """Closing line value rispetto alla quota Pinnacle di chiusura senza margine."""
     outcomes = MARKETS[market]
     close = [row.get(f"close_ps_{o}") for o in outcomes]
-    if any(pd.isna(x) for x in close):
+    if any(pd.isna(x) or x <= 1 for x in close):
         return float("nan")
     fair = dict(zip(outcomes, fair_probs(close)))
     return odds * fair[pick] - 1

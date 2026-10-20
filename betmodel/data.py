@@ -55,6 +55,19 @@ ODDS_ALIASES = {
     "close_ps_O25": ["PC>2.5"], "close_ps_U25": ["PC<2.5"],
 }
 
+# Bookmaker "morbidi" con quote 1X2 nei CSV (prefisso della colonna -> nome).
+# Le colonne compaiono e spariscono negli anni: se manca, il valore è NaN.
+SOFT_BOOKS = {
+    "B365": "Bet365", "BW": "bwin", "WH": "William Hill", "IW": "Interwetten",
+    "VC": "BetVictor", "LB": "Ladbrokes", "GB": "Gamebookers", "SJ": "Stan James",
+    "BS": "Blue Square", "1XB": "1xBet", "BMGM": "BetMGM", "BV": "BetVictor (nuovo)",
+    "CL": "Coral",
+}
+for _book in SOFT_BOOKS:
+    if _book != "B365":  # Bet365 è già in ODDS_ALIASES
+        for _o in "HDA":
+            ODDS_ALIASES[f"odds_{_book.lower()}_{_o}"] = [f"{_book}{_o}"]
+
 
 def season_code(start_year: int) -> str:
     """2024 -> '2425' (stagione 2024/25)."""
