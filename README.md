@@ -65,6 +65,9 @@ Sullo storico dimezza le scommesse ma alza la CLV media (da circa +3% a +4/5%).
 ```bash
 python -m betmodel sharp --league I1,I2 --model-filter 0
 
+# compromesso: modello d'accordo, oppure edge Pinnacle >= 3% anche senza modello
+python -m betmodel sharp --league I1,I2 --model-filter 0 --override-edge 0.03
+
 # il modello da solo aggiunge informazione alle quote Pinnacle? (log loss)
 python -m betmodel evaluate --league I1
 ```

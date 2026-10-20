@@ -164,6 +164,8 @@ def _add_sharp_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--kelly-fraction", type=float, default=d.kelly_fraction)
     p.add_argument("--model-filter", type=float, default=None,
                    help="punta solo se anche il modello vede un edge maggiore di questo valore (es. 0)")
+    p.add_argument("--override-edge", type=float, default=None,
+                   help="con --model-filter: punta comunque se l'edge Pinnacle supera questo valore")
     p.add_argument("--goals-weight", type=float, default=d.goals_weight,
                    help="modello: peso dei gol rispetto ai tiri in porta (1 = solo gol)")
 
@@ -174,7 +176,8 @@ def _sharp_config(args) -> sharp.SharpConfig:
         markets=tuple(m.strip() for m in args.markets.split(",")),
         min_edge=args.min_edge, min_odds=args.min_odds, max_odds=args.max_odds,
         staking=args.staking, kelly_fraction=args.kelly_fraction,
-        model_filter=args.model_filter, goals_weight=args.goals_weight,
+        model_filter=args.model_filter, override_edge=args.override_edge,
+        goals_weight=args.goals_weight,
     )
 
 

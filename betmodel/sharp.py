@@ -35,6 +35,8 @@ class SharpConfig:
     # Filtro con il modello: punta solo se anche prob_modello * quota - 1 > model_filter.
     # None = nessun filtro. Richiede le colonne m_<esito> (vedi evaluate.walk_forward).
     model_filter: float | None = None
+    # Con il filtro attivo, le occasioni con edge >= override_edge passano comunque
+    override_edge: float | None = None
     goals_weight: float = 0.5
 
 
@@ -64,7 +66,8 @@ def find_bets(matches: pd.DataFrame, cfg: SharpConfig) -> list[dict]:
                 if not (cfg.min_odds <= price <= cfg.max_odds):
                     continue
                 e = fair[o] * price - 1
-                if cfg.model_filter is not None:
+                override = cfg.override_edge is not None and e >= cfg.override_edge
+                if cfg.model_filter is not None and not override:
                     pm = row.get(f"m_{o}")
                     if pd.isna(pm) or pm * price - 1 <= cfg.model_filter:
                         continue

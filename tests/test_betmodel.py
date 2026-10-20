@@ -181,3 +181,15 @@ def test_targets_mix_goals_and_shots():
     t = _targets(past, goals_weight=0.5)
     # conversione = 4 gol / 16 tiri in porta = 0.25 -> 1 gol atteso per squadra
     assert list(t["th"]) == [1.5, 0.5] and list(t["ta"]) == [0.5, 1.5]
+
+
+def test_sharp_override_edge_bypasses_model_filter():
+    from betmodel import sharp
+    row = {"date": pd.Timestamp("2024-01-01"), "hg": 1, "ag": 0, "home": "A", "away": "B",
+           "odds_ps_H": 2.0, "odds_ps_D": 3.5, "odds_ps_A": 4.0, "odds_wh_H": 2.30,
+           "m_H": 0.40, "m_D": 0.25, "m_A": 0.25}  # modello contrario, edge Pinnacle ~ +10%
+    rows = pd.DataFrame([row])
+    filt = sharp.SharpConfig(books=("wh",), markets=("1x2",), model_filter=0.0)
+    assert sharp.find_bets(rows, filt) == []
+    filt.override_edge = 0.05
+    assert len(sharp.find_bets(rows, filt)) == 1
