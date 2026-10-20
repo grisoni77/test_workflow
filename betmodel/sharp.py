@@ -32,6 +32,10 @@ class SharpConfig:
     kelly_fraction: float = 0.25
     stake_cap: float = 0.05
     start_bankroll: float = 100.0
+    # Filtro con il modello: punta solo se anche prob_modello * quota - 1 > model_filter.
+    # None = nessun filtro. Richiede le colonne m_<esito> (vedi evaluate.walk_forward).
+    model_filter: float | None = None
+    goals_weight: float = 0.5
 
 
 def _soft_columns(market: str, outcome: str, books: tuple[str, ...]) -> list[str]:
@@ -60,6 +64,10 @@ def find_bets(matches: pd.DataFrame, cfg: SharpConfig) -> list[dict]:
                 if not (cfg.min_odds <= price <= cfg.max_odds):
                     continue
                 e = fair[o] * price - 1
+                if cfg.model_filter is not None:
+                    pm = row.get(f"m_{o}")
+                    if pd.isna(pm) or pm * price - 1 <= cfg.model_filter:
+                        continue
                 if e >= cfg.min_edge:
                     book = best.split("_")[1]
                     candidates.append((e, o, price, book))
@@ -72,6 +80,9 @@ def find_bets(matches: pd.DataFrame, cfg: SharpConfig) -> list[dict]:
 
 
 def run(matches: pd.DataFrame, cfg: SharpConfig) -> Result:
+    if cfg.model_filter is not None and "m_H" not in matches:
+        from .evaluate import ModelConfig, walk_forward
+        matches = walk_forward(matches, ModelConfig(goals_weight=cfg.goals_weight))
     matches = matches.sort_values("date", kind="stable").reset_index(drop=True)
     bankroll = cfg.start_bankroll
     records = []

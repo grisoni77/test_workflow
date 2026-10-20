@@ -55,6 +55,8 @@ ODDS_ALIASES = {
     "close_ps_O25": ["PC>2.5"], "close_ps_U25": ["PC<2.5"],
 }
 
+STATS_COLUMNS = {"hshots": "HS", "ashots": "AS", "hsot": "HST", "asot": "AST"}
+
 # Bookmaker "morbidi" con quote 1X2 nei CSV (prefisso della colonna -> nome).
 # Le colonne compaiono e spariscono negli anni: se manca, il valore è NaN.
 SOFT_BOOKS = {
@@ -119,6 +121,9 @@ def normalize(raw: pd.DataFrame, require_result: bool = True) -> pd.DataFrame:
     if require_result:
         out["hg"] = pd.to_numeric(raw["FTHG"], errors="coerce")
         out["ag"] = pd.to_numeric(raw["FTAG"], errors="coerce")
+    # Statistiche di partita (non presenti in tutte le stagioni/campionati)
+    for col, src in STATS_COLUMNS.items():
+        out[col] = pd.to_numeric(raw[src], errors="coerce") if src in raw.columns else float("nan")
     for col, aliases in ODDS_ALIASES.items():
         src = next((a for a in aliases if a in raw.columns), None)
         out[col] = pd.to_numeric(raw[src], errors="coerce") if src else float("nan")

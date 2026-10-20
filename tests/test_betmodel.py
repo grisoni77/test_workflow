@@ -162,3 +162,22 @@ def test_sharp_bets_only_when_soft_beats_pinnacle():
     assert [(b["home"], b["pick"], b["book"], b["odds"]) for b in bets] == [("C", "H", "wh", 2.30)]
     res = sharp.run(rows, cfg)
     assert res.summary["bets"] == 1 and res.summary["profit"] == pytest.approx(1.30)
+
+
+def test_sharp_model_filter_drops_bets_the_model_disagrees_with():
+    from betmodel import sharp
+    base = {"date": pd.Timestamp("2024-01-01"), "hg": 1, "ag": 0,
+            "odds_ps_H": 2.0, "odds_ps_D": 3.5, "odds_ps_A": 4.0, "odds_wh_H": 2.30,
+            "m_D": 0.25, "m_A": 0.25}
+    rows = pd.DataFrame([{**base, "home": "A", "away": "B", "m_H": 0.40},   # modello contrario
+                         {**base, "home": "C", "away": "D", "m_H": 0.50}])  # modello d'accordo
+    cfg = sharp.SharpConfig(books=("wh",), markets=("1x2",), model_filter=0.0)
+    assert [b["home"] for b in sharp.find_bets(rows, cfg)] == ["C"]
+
+
+def test_targets_mix_goals_and_shots():
+    from betmodel.evaluate import _targets
+    past = pd.DataFrame({"hg": [2, 0], "ag": [0, 2], "hsot": [4, 4], "asot": [4, 4]})
+    t = _targets(past, goals_weight=0.5)
+    # conversione = 4 gol / 16 tiri in porta = 0.25 -> 1 gol atteso per squadra
+    assert list(t["th"]) == [1.5, 0.5] and list(t["ta"]) == [0.5, 1.5]

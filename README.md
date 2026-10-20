@@ -58,6 +58,17 @@ python -m betmodel sharp --league I1,I2,SP2,T1 --books b365,bw,wh --min-edge 0.0
 python -m betmodel sharp-scan --league I1,I2
 ```
 
+Con `--model-filter 0` si punta solo quando anche il modello Dixon-Coles
+(stimato su gol e tiri in porta, `--goals-weight 0.5`) vede valore nella quota.
+Sullo storico dimezza le scommesse ma alza la CLV media (da circa +3% a +4/5%).
+
+```bash
+python -m betmodel sharp --league I1,I2 --model-filter 0
+
+# il modello da solo aggiunge informazione alle quote Pinnacle? (log loss)
+python -m betmodel evaluate --league I1
+```
+
 Limiti da tenere presenti:
 - le quote dei CSV sono una fotografia (di solito il venerdì): con quote in
   tempo reale le occasioni sono di più ma durano poco;

@@ -63,8 +63,14 @@ class DixonColes:
         self.home_adv = 1.0
         self.rho = 0.0
 
-    def fit(self, matches: pd.DataFrame, as_of: pd.Timestamp | None = None) -> "DixonColes":
-        """Stima i parametri sulle partite passate (colonne date, home, away, hg, ag)."""
+    def fit(self, matches: pd.DataFrame, as_of: pd.Timestamp | None = None,
+            target: tuple[str, str] = ("hg", "ag")) -> "DixonColes":
+        """Stima i parametri sulle partite passate (colonne date, home, away, hg, ag).
+
+        ``target`` sono le colonne usate per stimare attacco/difesa: di default i
+        gol, ma possono essere "gol attesi" non interi (es. da tiri in porta).
+        ``rho`` è sempre stimato sui gol reali.
+        """
         if as_of is None:
             as_of = matches["date"].max()
         days = (as_of - matches["date"]).dt.days.to_numpy(dtype=float)
@@ -74,8 +80,8 @@ class DixonColes:
         idx = {t: i for i, t in enumerate(teams)}
         h = matches["home"].map(idx).to_numpy()
         a = matches["away"].map(idx).to_numpy()
-        hg = matches["hg"].to_numpy(dtype=float)
-        ag = matches["ag"].to_numpy(dtype=float)
+        hg = matches[target[0]].to_numpy(dtype=float)
+        ag = matches[target[1]].to_numpy(dtype=float)
         n = len(teams)
 
         # Gol fatti/subiti pesati: costanti durante le iterazioni
@@ -101,7 +107,8 @@ class DixonColes:
 
         lam = att[h] * dfn[a] * gamma
         mu = att[a] * dfn[h]
-        self.rho = self._fit_rho(hg.astype(int), ag.astype(int), lam, mu, w)
+        self.rho = self._fit_rho(matches["hg"].to_numpy(dtype=int), matches["ag"].to_numpy(dtype=int),
+                                 lam, mu, w)
 
         self.teams = teams
         self.attack = dict(zip(teams, att))

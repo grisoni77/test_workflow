@@ -162,6 +162,10 @@ def _add_sharp_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--max-odds", type=float, default=d.max_odds)
     p.add_argument("--staking", default=d.staking, choices=["flat", "kelly"])
     p.add_argument("--kelly-fraction", type=float, default=d.kelly_fraction)
+    p.add_argument("--model-filter", type=float, default=None,
+                   help="punta solo se anche il modello vede un edge maggiore di questo valore (es. 0)")
+    p.add_argument("--goals-weight", type=float, default=d.goals_weight,
+                   help="modello: peso dei gol rispetto ai tiri in porta (1 = solo gol)")
 
 
 def _sharp_config(args) -> sharp.SharpConfig:
@@ -170,6 +174,7 @@ def _sharp_config(args) -> sharp.SharpConfig:
         markets=tuple(m.strip() for m in args.markets.split(",")),
         min_edge=args.min_edge, min_odds=args.min_odds, max_odds=args.max_odds,
         staking=args.staking, kelly_fraction=args.kelly_fraction,
+        model_filter=args.model_filter, goals_weight=args.goals_weight,
     )
 
 
@@ -204,6 +209,9 @@ def cmd_sharp_scan(args) -> None:
     fixtures = data.load_csv(Path(args.fixtures or args.data_dir / "fixtures.csv"), require_result=False)
     if args.league:
         fixtures = fixtures[fixtures["league"].isin(args.league.split(","))]
+    if args.model_filter is not None:
+        print("--model-filter non è ancora supportato in sharp-scan", file=sys.stderr)
+        return
     if fixtures["odds_ps_H"].isna().all():
         print("il file fixtures non contiene quote Pinnacle: servono quote in tempo reale "
               "(es. The Odds API) per usare questa strategia sulle prossime partite")
@@ -216,6 +224,26 @@ def cmd_sharp_scan(args) -> None:
         print(f"{row.get('league', '')} {b['date']:%d/%m} {b['home']} - {b['away']}: "
               f"{b['pick']} @ {b['odds']:.2f} su {data.SOFT_BOOKS.get(b['book'].upper(), b['book'])}  "
               f"prob Pinnacle {b['prob']:.1%}  edge {b['edge']:+.1%}")
+
+
+def cmd_evaluate(args) -> None:
+    """Il modello aggiunge informazione alle quote Pinnacle? (log loss walk-forward)"""
+    from . import evaluate as ev
+
+    for league in args.league.split(","):
+        matches = data.load_league(league, args.data_dir)
+        if args.goals_weight < 1:
+            matches = matches[matches["hsot"].notna()]
+        probs = ev.walk_forward(matches, ev.ModelConfig(goals_weight=args.goals_weight))
+        probs = ev.add_market_probs(probs, "odds_ps", "ps").dropna(subset=["ps_H"])
+        it = ev.information_test(probs)
+        best = it.loc[it["log_loss"].idxmin()]
+        print(f"\n=== {league} ({len(probs)} partite) ===")
+        print(f"log loss modello:   {ev.log_loss(probs, 'm'):.4f}")
+        print(f"log loss Pinnacle:  {ev.log_loss(probs, 'ps'):.4f}")
+        print(f"miglior mix:        peso modello {best['model_weight']:.2f} -> {best['log_loss']:.4f}")
+        if best["model_weight"] == 0:
+            print("il modello non aggiunge informazione alle quote Pinnacle")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -257,6 +285,11 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--fixtures", help="CSV fixtures (default: <data-dir>/fixtures.csv)")
     _add_sharp_args(p)
     p.set_defaults(func=cmd_sharp_scan)
+
+    p = sub.add_parser("evaluate", help="confronta le previsioni del modello con le quote Pinnacle")
+    p.add_argument("--league", default="I1")
+    p.add_argument("--goals-weight", type=float, default=0.5)
+    p.set_defaults(func=cmd_evaluate)
 
     args = parser.parse_args(argv)
     args.func(args)
