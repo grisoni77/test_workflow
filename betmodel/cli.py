@@ -229,6 +229,40 @@ def cmd_sharp_scan(args) -> None:
               f"prob Pinnacle {b['prob']:.1%}  edge {b['edge']:+.1%}")
 
 
+def cmd_live_scan(args) -> None:
+    """Opportunità sharp vs soft con le quote in tempo reale di The Odds API."""
+    from . import live
+
+    key = live.load_api_key()
+    cfg = _sharp_config(args)
+    for league in args.league.split(","):
+        sport = live.SPORT_KEYS.get(league)
+        if not sport:
+            print(f"{league}: campionato non mappato su The Odds API", file=sys.stderr)
+            continue
+        events, quota = live.fetch_odds(sport, key, regions=args.regions, markets=args.api_markets)
+        live.save_snapshot(events, sport, args.data_dir / "live")
+        frame = live.events_to_frame(events, league)
+        print(f"\n=== {league} ({sport}): {len(frame)} partite — crediti usati {quota['used']}, "
+              f"rimanenti {quota['remaining']} ===")
+        if frame.empty:
+            continue
+        books = live.soft_books(frame)
+        if args.books_live:
+            books = tuple(b for b in books if b in args.books_live.split(","))
+        print(f"bookmaker: {', '.join(books) or 'nessuno'}")
+        if "odds_ps_H" not in frame:
+            print("Pinnacle non presente nella risposta: impossibile calcolare le probabilità di riferimento")
+            continue
+        cfg.books = books
+        bets = sharp.find_bets(frame, cfg)
+        if not bets:
+            print(f"nessuna opportunità con edge >= {cfg.min_edge:.0%}")
+        for b in sorted(bets, key=lambda b: -b["edge"]):
+            print(f"{b['date']:%d/%m %H:%M} {b['home']} - {b['away']}: {b['pick']} @ {b['odds']:.2f} "
+                  f"su {b['book']}  prob Pinnacle {b['prob']:.1%}  edge {b['edge']:+.1%}")
+
+
 def cmd_evaluate(args) -> None:
     """Il modello aggiunge informazione alle quote Pinnacle? (log loss walk-forward)"""
     from . import evaluate as ev
@@ -288,6 +322,14 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--fixtures", help="CSV fixtures (default: <data-dir>/fixtures.csv)")
     _add_sharp_args(p)
     p.set_defaults(func=cmd_sharp_scan)
+
+    p = sub.add_parser("live-scan", help="opportunità sharp vs soft con quote in tempo reale (The Odds API)")
+    p.add_argument("--league", default="I1,I2")
+    p.add_argument("--regions", default="eu", help="regioni The Odds API, es. eu oppure eu,uk (costa crediti)")
+    p.add_argument("--api-markets", default="h2h,totals", help="mercati richiesti all'API (costa crediti)")
+    p.add_argument("--books-live", help="limita ai bookmaker indicati (chiavi The Odds API senza '_')")
+    _add_sharp_args(p)
+    p.set_defaults(func=cmd_live_scan)
 
     p = sub.add_parser("evaluate", help="confronta le previsioni del modello con le quote Pinnacle")
     p.add_argument("--league", default="I1")

@@ -79,6 +79,19 @@ Limiti da tenere presenti:
 - le quote dei siti italiani (.it) possono differire da quelle internazionali
   presenti nei CSV, e non tutti i bookmaker sono autorizzati in Italia (ADM).
 
+## Quote in tempo reale (The Odds API)
+
+Serve una chiave di https://the-odds-api.com, da tenere nel file `.env`
+(escluso da git) oppure nella variabile d'ambiente `ODDS_API_KEY`:
+
+```bash
+echo "ODDS_API_KEY=la-tua-chiave" > .env
+python -m betmodel live-scan --league I1,I2 --min-edge 0.02
+```
+
+Ogni campionato costa (mercati × regioni) crediti: con i default `h2h,totals`
+e `eu` sono 2 crediti. Le risposte sono salvate in `data/live/`.
+
 ## Come leggere il backtest
 
 - **ROI**: profitto / puntato. Il margine del bookmaker parte da −4/−8%.

@@ -41,10 +41,8 @@ class SharpConfig:
 
 
 def _soft_columns(market: str, outcome: str, books: tuple[str, ...]) -> list[str]:
-    if market == "1x2":
-        return [f"odds_{b}_{outcome}" for b in books]
-    # Over/Under: nei CSV c'è un solo bookmaker morbido (Bet365)
-    return [f"odds_b365_{outcome}"] if "b365" in books else []
+    # Nei CSV storici l'Over/Under c'è solo per Bet365: le altre colonne mancano e vengono ignorate
+    return [f"odds_{b}_{outcome}" for b in books]
 
 
 def find_bets(matches: pd.DataFrame, cfg: SharpConfig) -> list[dict]:

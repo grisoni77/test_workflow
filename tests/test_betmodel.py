@@ -193,3 +193,47 @@ def test_sharp_override_edge_bypasses_model_filter():
     assert sharp.find_bets(rows, filt) == []
     filt.override_edge = 0.05
     assert len(sharp.find_bets(rows, filt)) == 1
+
+
+# --- quote in tempo reale ---
+
+SAMPLE_EVENTS = [{
+    "id": "x", "sport_key": "soccer_italy_serie_a", "commence_time": "2026-10-25T14:00:00Z",
+    "home_team": "Inter Milan", "away_team": "AC Milan",
+    "bookmakers": [
+        {"key": "pinnacle", "markets": [
+            {"key": "h2h", "outcomes": [{"name": "Inter Milan", "price": 2.0},
+                                        {"name": "AC Milan", "price": 4.0},
+                                        {"name": "Draw", "price": 3.5}]},
+            {"key": "totals", "outcomes": [{"name": "Over", "price": 1.9, "point": 2.5},
+                                           {"name": "Under", "price": 1.95, "point": 2.5}]}]},
+        {"key": "unibet_eu", "markets": [
+            {"key": "h2h", "outcomes": [{"name": "Inter Milan", "price": 2.30},
+                                        {"name": "AC Milan", "price": 3.6},
+                                        {"name": "Draw", "price": 3.3}]},
+            {"key": "totals", "outcomes": [{"name": "Over", "price": 2.1, "point": 3.5}]}]},
+        {"key": "betfair_ex_eu", "markets": [
+            {"key": "h2h", "outcomes": [{"name": "Inter Milan", "price": 2.6}]}]},
+    ],
+}]
+
+
+def test_live_events_to_frame_and_scan():
+    from betmodel import live, sharp
+    f = live.events_to_frame(SAMPLE_EVENTS, "I1")
+    r = f.iloc[0]
+    assert (r["odds_ps_H"], r["odds_ps_D"], r["odds_ps_A"], r["odds_ps_O25"]) == (2.0, 3.5, 4.0, 1.9)
+    assert r["odds_unibeteu_H"] == 2.30
+    assert "odds_unibeteu_O25" not in f  # linea 3.5 ignorata
+    assert not any("betfair" in c for c in f.columns)  # exchange esclusi
+    assert live.soft_books(f) == ("unibeteu",)
+    bets = sharp.find_bets(f, sharp.SharpConfig(books=live.soft_books(f)))
+    assert [(b["pick"], b["book"], b["odds"]) for b in bets] == [("H", "unibeteu", 2.30)]
+
+
+def test_load_api_key_from_env_file(tmp_path, monkeypatch):
+    from betmodel import live
+    monkeypatch.delenv("ODDS_API_KEY", raising=False)
+    env = tmp_path / ".env"
+    env.write_text("ODDS_API_KEY=abc123\n")
+    assert live.load_api_key(env) == "abc123"
